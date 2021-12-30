@@ -136,6 +136,8 @@ k8s.ns=kube-system k8s.pod=cilium-gnxtg container=95aabc064e2a
 image=docker.io/digitalocean/cilium:1.10.1-con-4989-actual) k8s.ns=kube-system k8s.pod=cilium-gnxtg container=95aabc064e2a k8s.ns=kube-system
 ```
 
+![See Falco detect root login to another pod](/img/falco-demo.png)
+
 ## Learnings
 
 1. Don't copy-paste things you don't understand.  
