@@ -16,6 +16,8 @@ These instructions are for windows but should be similar for other OSes.
    ```
    $ choco install doctl
    $ choco install kubernetes-cli
+   $ choco install kubernetes-helm
+   $ choco install lens
    $ choco install terraform
    ```
 1. Authenticate the digital ocean cli tool
@@ -74,6 +76,90 @@ These instructions are for windows but should be similar for other OSes.
    kube-system   kube-proxy-2tqxf                   1/1     Running   0          39m
    kube-system   kube-proxy-fsfvv                   1/1     Running   0          39m
    ```
+
+## Install Falco
+
+They suggest you [install falco on the host nodes](https://falco.org/docs/getting-started/installation/) 
+but we want to install on the k8s cluster as a [daemonset](https://falco.org/docs/getting-started/deployment/)
+using [helm](https://github.com/falcosecurity/charts/tree/master/falco).
+
+```
+$ kubectl create ns falco-system
+$ helm repo add falcosecurity https://falcosecurity.github.io/charts
+$ helm repo update
+$ helm upgrade --install --atomic falco falcosecurity/falco --namespace falco-system
+Release "falco" does not exist. Installing it now.
+NAME: falco
+LAST DEPLOYED: Wed Dec 29 16:52:22 2021
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+Falco agents are spinning up on each node in your cluster. After a few
+seconds, they are going to start monitoring your containers looking for
+security issues.
+
+No further action should be required.
+
+Tip:
+You can easily forward Falco events to Slack, Kafka, AWS Lambda and more with falcosidekick.
+Full list of outputs: https://github.com/falcosecurity/charts/falcosidekick.
+You can enable its deployment with `--set falcosidekick.enabled=true` or in your values.yaml.
+See: https://github.com/falcosecurity/charts/blob/master/falcosidekick/values.yaml for configuration values.
+
+```
+
+## Test Falco
+
+**Get a shell in a cilium pod:**
+```
+$ kubectl exec --stdin --tty cilium-gnxtg -n kube-system -- /bin/bash
+```
+
+**Check the falco logs:**
+```
+$ kubectl logs falco-xdd6s -n falco-system | Select-String cilium
+# An excerpt of interesting entries:
+03:07:17.708277937: Notice A shell was spawned in a container with an attached terminal (user=root user_loginuid=-1 k8s.ns=kube-system
+k8s.pod=cilium-gnxtg container=95aabc064e2a shell=bash parent=runc cmdline=bash terminal=34816 container_id=95aabc064e2a
+image=docker.io/digitalocean/cilium) k8s.ns=kube-system k8s.pod=cilium-gnxtg container=95aabc064e2a
+03:08:07.158098336: Warning Shell history had been deleted or renamed (user=root user_loginuid=-1 type=openat command=bash
+fd.name=/root/.bash_history name=/root/.bash_history path=<NA> oldpath=<NA> k8s.ns=kube-system k8s.pod=cilium-gnxtg container=95aabc064e2a)
+k8s.ns=kube-system k8s.pod=cilium-gnxtg container=95aabc064e2a
+
+# There is also a lot of noise:
+03:09:31.411265124: Notice Packet socket was created in a container (user=root user_loginuid=-1 command=cilium-agent --kvstore=etcd
+--kvstore-opt=etcd.config=/var/lib/etcd-config/etcd.config --config-dir=/tmp/cilium/config-map --enable-node-port=true --enable-host-port=true
+--enable-health-check-nodeport=false --kube-proxy-replacement=partial --enable-host-reachable-services=false --enable-egress-gateway=false
+--arping-refresh-period=30s socket_info=domain=17(AF_PACKET) type=3 proto=1544  container_id=95aabc064e2a container_name=cilium-agent
+image=docker.io/digitalocean/cilium:1.10.1-con-4989-actual) k8s.ns=kube-system k8s.pod=cilium-gnxtg container=95aabc064e2a k8s.ns=kube-system
+```
+
+## Learnings
+
+1. Don't copy-paste things you don't understand.  
+   I initially had this taint on my node pool and this prevented falco pods from launching. 
+   Strangely there were no events in the falco-system namespace to give me a hint.  
+   ```
+       taint {
+         key    = "workloadKind"
+         value  = "database"
+         effect = "NoSchedule"
+       }
+   ```
+1. As part of troubleshooting the above I decided to upgrade my cluster to 1.21.x and also decided 2 gigs of RAM per
+   node was too little and upgraded to 4 gig droplets.
+   1. Upgrading the k8s version was mostly fine and not disruptive
+   2. Upgrading the droplet instance type of the node_pool destroyed the entire cluster! Probably best to use a separate
+      [node pool resource](https://registry.terraform.io/providers/digitalocean/digitalocean/latest/docs/resources/kubernetes_node_pool)
+      instead of the node_pool attribute in the digitalocean_kubernetes_cluster TF resource! 
+
+## Thanks
+
+Many thanks to [diogoheyoh](https://github.com/IrregularLine/digital-ocean-challenge) for the assist on comparing my 
+cluster/config to theirs.
+
 ## References
 
 * [DO K8s TF Resource](https://registry.terraform.io/providers/digitalocean/digitalocean/latest/docs/resources/kubernetes_cluster)

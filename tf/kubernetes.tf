@@ -11,15 +11,9 @@ resource "digitalocean_kubernetes_cluster" "dev-01" {
   node_pool {
     name       = "default"
     # Get size from doctl kubernetes options sizes
-    size       = "s-2vcpu-2gb" # $15/month per https://slugs.do-api.dev/
+    size       = "s-2vcpu-4gb" # $20/month per https://slugs.do-api.dev/
     node_count = 2
     auto_scale = false
-    # Prevents DBs?
-    taint {
-      key    = "workloadKind"
-      value  = "database"
-      effect = "NoSchedule"
-    }
   }
 
   maintenance_policy {
@@ -33,5 +27,5 @@ data "digitalocean_vpc" "sfo3-vpc-01" {
 }
 
 data "digitalocean_kubernetes_versions" "k8s_version" {
-  version_prefix = "1.20."
+  version_prefix = "1.21."
 }
